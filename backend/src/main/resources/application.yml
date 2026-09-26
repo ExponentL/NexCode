@@ -1,0 +1,26 @@
+server:
+  port: ${SERVER_PORT:8080}
+  address: 0.0.0.0
+
+spring:
+  application:
+    name: codingagent-backend
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+agent:
+  workspace-root: ${WORKSPACE_PATH:${AGENT_WORKSPACE_ROOT:.}}
+  max-attempts: ${AGENT_MAX_ATTEMPTS:5}
+  model:
+    provider: ${AI_MODEL_PROVIDER:${AGENT_MODEL_PROVIDER:openai}}
+    name: ${AI_MODEL_NAME:${AGENT_MODEL_NAME:gpt-4o}}
+    api-key: ${AI_API_KEY:${AGENT_MODEL_API_KEY:}}
+    base-url: ${AI_BASE_URL:${AGENT_MODEL_BASE_URL:https://api.openai.com/v1}}
+    timeout-seconds: 120
+    temperature: 0.1
+
+logging:
+  level:
+    root: INFO
+    com.example.codingagent: DEBUG
