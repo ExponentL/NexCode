@@ -108,16 +108,28 @@ export const agentApi = {
   },
 
   async cloneGitHub(url: string): Promise<import('../types/agent').WorkspaceSelectionResult> {
-    const res = await fetch(`${API_BASE}/workspaces/clone-github`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to clone GitHub repository: ${err}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    try {
+      const res = await fetch(`${API_BASE}/workspaces/clone-github`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Failed to clone GitHub repository: ${err}`);
+      }
+      return res.json();
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new Error('Clone request timed out after 60 seconds.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return res.json();
   },
 
   async getTaskEvents(id: string): Promise<AgentEvent[]> {

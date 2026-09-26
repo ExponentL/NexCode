@@ -50,6 +50,10 @@ public class AgentProperties {
             if (envAgentProvider != null && !envAgentProvider.isBlank()) {
                 return envAgentProvider.trim();
             }
+            String key = getApiKey();
+            if (key != null && key.startsWith("sk-xt-")) {
+                return "xkiro";
+            }
             return provider;
         }
 
@@ -65,6 +69,10 @@ public class AgentProperties {
             String envAgentName = System.getenv("AGENT_MODEL_NAME");
             if (envAgentName != null && !envAgentName.isBlank()) {
                 return envAgentName.trim();
+            }
+            String key = getApiKey();
+            if (key != null && key.startsWith("sk-xt-")) {
+                return "qwen/qwen3.5-flash:free";
             }
             return name;
         }
@@ -100,6 +108,10 @@ public class AgentProperties {
             String envAgentBase = System.getenv("AGENT_MODEL_BASE_URL");
             if (envAgentBase != null && !envAgentBase.isBlank()) {
                 return envAgentBase.trim();
+            }
+            String key = getApiKey();
+            if (key != null && key.startsWith("sk-xt-")) {
+                return "https://api.xkiro.com/v1";
             }
             return baseUrl;
         }

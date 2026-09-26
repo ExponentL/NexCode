@@ -131,51 +131,95 @@ public class WorkspaceService {
 
         Path targetRepoDir = cloneBaseDir.resolve(repoName).toAbsolutePath().normalize();
 
-        // If repository already exists on disk and is a git repository, pull latest changes
-        if (Files.exists(targetRepoDir) && Files.exists(targetRepoDir.resolve(".git"))) {
-            log.info("Repository already cloned at {}. Pulling latest changes...", targetRepoDir);
-            try {
-                Process pullProc = new ProcessBuilder("git", "pull")
-                        .directory(targetRepoDir.toFile())
-                        .redirectErrorStream(true)
-                        .start();
-                pullProc.waitFor(60, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.warn("Git pull failed, using existing repository: {}", e.getMessage());
+        // If repository directory already exists on disk
+        if (Files.exists(targetRepoDir)) {
+            if (Files.exists(targetRepoDir.resolve(".git"))) {
+                log.info("Repository already cloned at {}. Pulling latest changes...", targetRepoDir);
+                try {
+                    ProcessBuilder pullPb = new ProcessBuilder("git", "pull");
+                    pullPb.directory(targetRepoDir.toFile());
+                    pullPb.environment().put("GIT_TERMINAL_PROMPT", "0");
+                    pullPb.environment().put("GIT_ASKPASS", "echo");
+                    pullPb.redirectErrorStream(true);
+                    Process pullProc = pullPb.start();
+
+                    Thread pullReader = new Thread(() -> {
+                        try (BufferedReader r = new BufferedReader(new InputStreamReader(pullProc.getInputStream()))) {
+                            while (r.readLine() != null) {}
+                        } catch (Exception ignored) {}
+                    });
+                    pullReader.start();
+
+                    boolean pullFinished = pullProc.waitFor(15, TimeUnit.SECONDS);
+                    pullReader.join(1000);
+                    if (!pullFinished) {
+                        pullProc.destroyForcibly();
+                    }
+                } catch (Exception e) {
+                    log.warn("Git pull failed, using existing repository: {}", e.getMessage());
+                }
+                return setWorkspace(targetRepoDir.toString());
+            } else {
+                // Incomplete or corrupted clone directory exists, clean it up before re-cloning
+                try {
+                    log.info("Cleaning up incomplete repository directory at {}", targetRepoDir);
+                    org.springframework.util.FileSystemUtils.deleteRecursively(targetRepoDir);
+                } catch (Exception e) {
+                    log.warn("Failed to delete incomplete repository directory {}: {}", targetRepoDir, e.getMessage());
+                }
             }
-            return setWorkspace(targetRepoDir.toString());
         }
 
         log.info("Cloning repository {} to {}", url, targetRepoDir);
         try {
-            Process cloneProc = new ProcessBuilder("git", "clone", "--depth", "1", url, targetRepoDir.toString())
-                    .redirectErrorStream(true)
-                    .start();
+            ProcessBuilder clonePb = new ProcessBuilder("git", "clone", "--depth", "1", url, targetRepoDir.toString());
+            clonePb.environment().put("GIT_TERMINAL_PROMPT", "0");
+            clonePb.environment().put("GIT_ASKPASS", "echo");
+            clonePb.redirectErrorStream(true);
+            Process cloneProc = clonePb.start();
 
             StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(cloneProc.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
+            Thread readerThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(cloneProc.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                    }
+                } catch (Exception ignored) {}
+            });
+            readerThread.start();
 
-            boolean finished = cloneProc.waitFor(180, TimeUnit.SECONDS);
+            boolean finished = cloneProc.waitFor(45, TimeUnit.SECONDS);
+            readerThread.join(2000);
+
             if (!finished) {
                 cloneProc.destroyForcibly();
-                return WorkspaceSelectionResult.error("Git clone timed out after 180 seconds.");
+                try {
+                    org.springframework.util.FileSystemUtils.deleteRecursively(targetRepoDir);
+                } catch (Exception ignored) {}
+                return WorkspaceSelectionResult.error("Git clone timed out after 45 seconds.");
             }
 
             int exitCode = cloneProc.exitValue();
             if (exitCode != 0) {
-                log.error("Git clone failed (exit code {}): {}", exitCode, output);
-                return WorkspaceSelectionResult.error("Failed to clone repository: " + output.toString().trim());
+                try {
+                    org.springframework.util.FileSystemUtils.deleteRecursively(targetRepoDir);
+                } catch (Exception ignored) {}
+                String errMessage = output.toString().trim();
+                log.error("Git clone failed (exit code {}): {}", exitCode, errMessage);
+                if (errMessage.isBlank()) {
+                    errMessage = "Git clone exited with code " + exitCode;
+                }
+                return WorkspaceSelectionResult.error("Failed to clone repository: " + errMessage);
             }
 
             log.info("Repository successfully cloned. Analyzing codebase...");
             return setWorkspace(targetRepoDir.toString());
         } catch (Exception e) {
             log.error("Error executing git clone: {}", e.getMessage(), e);
+            try {
+                org.springframework.util.FileSystemUtils.deleteRecursively(targetRepoDir);
+            } catch (Exception ignored) {}
             return WorkspaceSelectionResult.error("Failed to execute git clone: " + e.getMessage());
         }
     }

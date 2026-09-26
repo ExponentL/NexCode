@@ -9,6 +9,11 @@ fi
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
 
+# Load environment variables if .env exists
+if [ -f ".env" ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
+
 # Ensure AI_API_KEY is available (read from environment, with optional .env fallback)
 if [ -z "$AI_API_KEY" ] && [ -f ".env" ]; then
     ENV_VAL=$(grep -E '^AI_API_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '"' | tr -d "'" || true)

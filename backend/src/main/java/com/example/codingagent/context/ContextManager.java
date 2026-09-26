@@ -105,11 +105,14 @@ public class ContextManager {
         system.append("{\"action\":\"READ_FILE\"|\"WRITE_FILE\"|\"CREATE_FILE\"|\"SEARCH\"|\"RUN_COMMAND\"|\"RUN_TESTS\"|\"FINISH\",");
         system.append("\"path\":\"relative/path\",\"content\":\"...\",\"command\":\"...\",\"reason\":\"...\"}\n\n");
 
-        system.append("Rules:\n");
-        system.append("1. Modify code directly using WRITE_FILE with the complete updated content.\n");
-        system.append("2. Verify changes with RUN_TESTS or RUN_COMMAND.\n");
-        system.append("3. Once tests pass and modifications are verified, emit FINISH immediately.\n");
-        system.append("4. Respond strictly with valid JSON conforming to the schema.");
+        system.append("CRITICAL EXECUTION RULES:\n");
+        system.append("1. REAL FILE MODIFICATIONS: When code must change, you MUST emit a structured WRITE_FILE or CREATE_FILE action containing the actual new file content.\n");
+        system.append("   - Do NOT merely describe, explain, or suggest edits.\n");
+        system.append("   - The 'content' field must contain the FULL updated file source code to write to disk.\n");
+        system.append("2. CONTINUATION TO TESTING: Immediately after modifying files, execute RUN_TESTS or RUN_COMMAND to test your changes.\n");
+        system.append("3. FAILURE RECOVERY: If tests or verification fail, inspect the real error and emit another WRITE_FILE action with the necessary fix.\n");
+        system.append("4. COMPLETION: Once all modifications are written and verified by passing tests, emit {\"action\": \"FINISH\"}.\n");
+        system.append("5. RESPONSE FORMAT: Always emit valid JSON conforming to the schema.");
 
         StringBuilder userContext = new StringBuilder();
 
@@ -280,9 +283,9 @@ public class ContextManager {
         if (state.getFilesModified().isEmpty()) {
             if (!state.getFilesInspected().isEmpty()) {
                 userContext.append("Files inspected: ").append(String.join(", ", state.getFilesInspected())).append(".\n");
-                userContext.append("Apply required modifications now: emit JSON with \"action\": \"WRITE_FILE\", target \"path\", and updated \"content\".\n\n");
+                userContext.append("CRITICAL: You must now apply the required code change to the repository. Emit JSON with \"action\": \"WRITE_FILE\", target \"path\", and the complete updated \"content\". Do not merely describe edits.\n\n");
             } else {
-                userContext.append("Inspect target file using READ_FILE or immediately apply modifications with WRITE_FILE.\n\n");
+                userContext.append("Inspect target files using READ_FILE or immediately apply the necessary changes using WRITE_FILE with the complete updated content.\n\n");
             }
         } else {
             boolean testsPassedAfterModification = actionResults != null && actionResults.stream()
@@ -291,7 +294,7 @@ public class ContextManager {
             if (testsPassedAfterModification) {
                 userContext.append("Automated tests already passed! Emit {\"action\": \"FINISH\"} immediately to complete the task.\n\n");
             } else {
-                userContext.append("Run tests (RUN_TESTS) to verify changes, or emit FINISH if all modifications and tests are verified.\n\n");
+                userContext.append("Files modified on disk. Next step: Execute RUN_TESTS now to run the real test suite and verify changes.\n\n");
             }
         }
 
