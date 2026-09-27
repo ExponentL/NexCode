@@ -1,0 +1,11 @@
+$ vite
+
+  VITE v5.4.21  ready in 79 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://10.3.0.137:5173/
+7:10:16 AM [vite] hmr update /src/pages/DashboardPage.tsx
+7:10:16 AM [vite] vite.config.ts changed, restarting server...
+7:10:16 AM [vite] server restarted.
+7:16:16 AM [vite] hmr update /src/components/CodeAgentHeader.tsx
+7:16:31 AM [vite] hmr update /src/components/CodeAgentHeader.tsx

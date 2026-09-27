@@ -5,13 +5,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class FileTool implements AgentTool {
@@ -72,13 +75,18 @@ public class FileTool implements AgentTool {
         }
 
         try {
-            return switch (rawAction.toUpperCase()) {
+            ToolResult res = switch (rawAction.toUpperCase()) {
                 case "READ_FILE", "READ", "VIEW" -> readFile(target, arguments);
                 case "WRITE_FILE", "WRITE", "EDIT", "MODIFY", "UPDATE", "PATCH" -> writeFile(target, content);
-                case "CREATE_FILE", "CREATE", "NEW" -> createFile(target, content);
+                case "CREATE_FILE", "CREATE", "NEW", "NEW_FILE", "TOUCH" -> createFile(target, content);
                 case "DELETE_FILE", "DELETE" -> deleteFile(target, arguments.get("allowDelete"));
                 default -> ToolResult.failure("Unsupported file action: " + rawAction + ". Supported: READ_FILE, WRITE_FILE, CREATE_FILE, DELETE_FILE.");
             };
+
+            if (res.success() && !rawAction.toUpperCase().contains("READ") && !rawAction.toUpperCase().contains("DELETE")) {
+                stageWithGitIntentToAdd(workingDirectory, target);
+            }
+            return res;
         } catch (Exception e) {
             log.error("FileTool error on action {}: {}", rawAction, e.getMessage());
             return ToolResult.failure("File operation error: " + e.getMessage());
@@ -173,7 +181,8 @@ public class FileTool implements AgentTool {
         }
 
         String initialContent = content != null ? content : "";
-        Files.writeString(path, initialContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+        Files.writeString(path, initialContent, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
 
         // Verify the file exists and contains the new content
         if (!Files.exists(path)) {
@@ -189,6 +198,21 @@ public class FileTool implements AgentTool {
                 "bytesWritten", initialContent.length(),
                 "file", path.toString()
         ));
+    }
+
+    private void stageWithGitIntentToAdd(String workingDirectory, Path target) {
+        if (workingDirectory == null || target == null) return;
+        try {
+            File workDir = new File(workingDirectory);
+            if (new File(workDir, ".git").exists()) {
+                Path base = workDir.toPath().toAbsolutePath().normalize();
+                Path rel = base.relativize(target.toAbsolutePath().normalize());
+                new ProcessBuilder("git", "add", "-N", rel.toString())
+                        .directory(workDir)
+                        .start()
+                        .waitFor(3, TimeUnit.SECONDS);
+            }
+        } catch (Exception ignored) {}
     }
 
     private ToolResult deleteFile(Path path, Object allowDelete) throws IOException {

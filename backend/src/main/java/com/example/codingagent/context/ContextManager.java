@@ -109,12 +109,13 @@ public class ContextManager {
         system.append("\"path\":\"relative/path\",\"content\":\"...\",\"command\":\"...\",\"reason\":\"...\"}\n\n");
 
         system.append("CRITICAL EXECUTION RULES:\n");
-        system.append("1. REAL FILE MODIFICATIONS: When code must change, you MUST emit a structured WRITE_FILE or CREATE_FILE action containing the actual new file content.\n");
-        system.append("   - Do NOT merely describe, explain, or suggest edits.\n");
-        system.append("   - The 'content' field must contain the FULL updated file source code to write to disk.\n");
-        system.append("2. CONTINUATION TO TESTING: Immediately after modifying files, execute RUN_TESTS or RUN_COMMAND to test your changes.\n");
-        system.append("3. FAILURE RECOVERY: If tests or verification fail, inspect the real error and emit another WRITE_FILE action with the necessary fix.\n");
-        system.append("4. COMPLETION: Once all modifications are written and verified by passing tests, emit {\"action\": \"FINISH\"}.\n");
+        system.append("1. REAL FILE CREATION & MODIFICATION: When files must be created or modified, you MUST emit a structured CREATE_FILE or WRITE_FILE action containing the actual file content.\n");
+        system.append("   - To create a new file on the user's device, emit {\"action\": \"CREATE_FILE\", \"path\": \"relative/path/to/file.ext\", \"content\": \"...\"}.\n");
+        system.append("   - Do NOT merely describe, explain, or suggest code.\n");
+        system.append("   - The 'content' field must contain the FULL file source code to write to disk.\n");
+        system.append("2. CONTINUATION TO TESTING: Immediately after creating or modifying files, execute RUN_TESTS or RUN_COMMAND to test your changes.\n");
+        system.append("3. FAILURE RECOVERY: If tests or verification fail, inspect the real error and emit another CREATE_FILE or WRITE_FILE action with the necessary fix.\n");
+        system.append("4. COMPLETION: Once all requested files are created or modified and verified by passing tests, emit {\"action\": \"FINISH\"}.\n");
         system.append("5. RESPONSE FORMAT: Always emit valid JSON conforming to the schema.");
 
         StringBuilder userContext = new StringBuilder();

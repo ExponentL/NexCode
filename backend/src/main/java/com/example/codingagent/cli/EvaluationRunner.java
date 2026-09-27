@@ -70,12 +70,13 @@ public class EvaluationRunner implements CommandLineRunner, ExitCodeGenerator {
 
     @Override
     public void run(String... args) throws Exception {
-        boolean isEval = Arrays.asList(args).contains("--eval")
-                || "true".equalsIgnoreCase(System.getenv("EVAL_MODE"))
-                || "true".equalsIgnoreCase(System.getProperty("eval.mode"));
+        // Evaluation CLI mode is ONLY triggered when explicitly requested via command line flag: --eval or --cli
+        // Normal web server mode must NEVER prompt in the terminal.
+        boolean isExplicitEval = (Arrays.asList(args).contains("--eval") || Arrays.asList(args).contains("--cli"))
+                && !"false".equalsIgnoreCase(System.getenv("EVAL_MODE"));
 
-        if (!isEval) {
-            // Normal server / UI mode: let Spring Boot serve Web & SSE endpoints
+        if (!isExplicitEval) {
+            // Normal server / UI mode: let Spring Boot serve Web & SSE endpoints without terminal blocking
             return;
         }
 

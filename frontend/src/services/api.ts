@@ -1,8 +1,23 @@
 import { AgentEvent, AgentState, CreateTaskPayload, RepositoryInfo } from '../types/agent';
 
-const API_BASE = (typeof window !== 'undefined' && window.location.port === '5173')
-  ? 'http://localhost:8080/api'
-  : '/api';
+const getApiBase = (): string => {
+  if (typeof window === 'undefined') return 'http://localhost:8080/api';
+  const envUrl = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_BACKEND_URL;
+  if (envUrl) {
+    return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
+  }
+
+  const hostname = window.location.hostname || 'localhost';
+  const protocol = window.location.protocol || 'http:';
+
+  // When frontend is on port 5173, dynamically route to port 8080 on the same host
+  if (window.location.port === '5173') {
+    return `${protocol}//${hostname}:8080/api`;
+  }
+  return '/api';
+};
+
+const API_BASE = getApiBase();
 
 export const agentApi = {
   async createTask(payload: CreateTaskPayload): Promise<AgentState> {
