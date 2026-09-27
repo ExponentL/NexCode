@@ -56,12 +56,13 @@ public class FileTool implements AgentTool {
 
     @Override
     public ToolResult execute(Map<String, Object> arguments, String workingDirectory) {
-        String action = (String) arguments.get("action");
-        String relativePath = (String) arguments.get("path");
-
-        if (action == null || relativePath == null) {
-            return ToolResult.failure("Arguments 'action' and 'path' are mandatory.");
+        String relativePath = extractPath(arguments);
+        if (relativePath == null || relativePath.isBlank()) {
+            return ToolResult.failure("Argument 'path' is mandatory for file operations.");
         }
+
+        String rawAction = arguments.get("action") != null ? String.valueOf(arguments.get("action")).trim() : "WRITE_FILE";
+        String content = extractContent(arguments);
 
         Path target;
         try {
@@ -71,17 +72,36 @@ public class FileTool implements AgentTool {
         }
 
         try {
-            return switch (action.toUpperCase()) {
-                case "READ_FILE" -> readFile(target, arguments);
-                case "WRITE_FILE" -> writeFile(target, (String) arguments.get("content"));
-                case "CREATE_FILE" -> createFile(target, (String) arguments.get("content"));
-                case "DELETE_FILE" -> deleteFile(target, arguments.get("allowDelete"));
-                default -> ToolResult.failure("Unsupported file action: " + action + ". Supported: READ_FILE, WRITE_FILE, CREATE_FILE, DELETE_FILE.");
+            return switch (rawAction.toUpperCase()) {
+                case "READ_FILE", "READ", "VIEW" -> readFile(target, arguments);
+                case "WRITE_FILE", "WRITE", "EDIT", "MODIFY", "UPDATE", "PATCH" -> writeFile(target, content);
+                case "CREATE_FILE", "CREATE", "NEW" -> createFile(target, content);
+                case "DELETE_FILE", "DELETE" -> deleteFile(target, arguments.get("allowDelete"));
+                default -> ToolResult.failure("Unsupported file action: " + rawAction + ". Supported: READ_FILE, WRITE_FILE, CREATE_FILE, DELETE_FILE.");
             };
         } catch (Exception e) {
-            log.error("FileTool error on action {}: {}", action, e.getMessage());
+            log.error("FileTool error on action {}: {}", rawAction, e.getMessage());
             return ToolResult.failure("File operation error: " + e.getMessage());
         }
+    }
+
+    private String extractPath(Map<String, Object> arguments) {
+        if (arguments.get("path") != null) return String.valueOf(arguments.get("path")).trim();
+        if (arguments.get("file") != null) return String.valueOf(arguments.get("file")).trim();
+        if (arguments.get("filepath") != null) return String.valueOf(arguments.get("filepath")).trim();
+        if (arguments.get("filename") != null) return String.valueOf(arguments.get("filename")).trim();
+        if (arguments.get("target") != null) return String.valueOf(arguments.get("target")).trim();
+        if (arguments.get("targetFile") != null) return String.valueOf(arguments.get("targetFile")).trim();
+        return null;
+    }
+
+    private String extractContent(Map<String, Object> arguments) {
+        if (arguments.get("content") != null) return String.valueOf(arguments.get("content"));
+        if (arguments.get("code") != null) return String.valueOf(arguments.get("code"));
+        if (arguments.get("newContent") != null) return String.valueOf(arguments.get("newContent"));
+        if (arguments.get("text") != null) return String.valueOf(arguments.get("text"));
+        if (arguments.get("body") != null) return String.valueOf(arguments.get("body"));
+        return null;
     }
 
     private ToolResult readFile(Path path, Map<String, Object> arguments) throws IOException {
@@ -123,9 +143,20 @@ public class FileTool implements AgentTool {
             Files.createDirectories(path.getParent());
         }
 
+        // Write new content to disk using Java NIO
         Files.writeString(path, content, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
 
+        // Verify the file exists and contains the new content
+        if (!Files.exists(path)) {
+            return ToolResult.failure("Verification failed: file does not exist on disk after write: " + path);
+        }
+        String written = Files.readString(path, StandardCharsets.UTF_8);
+        if (!written.equals(content)) {
+            return ToolResult.failure("Verification failed: written content verification mismatch on disk for " + path);
+        }
+
+        log.info("Successfully modified file on disk: {} ({} bytes)", path, content.length());
         return ToolResult.success("File written successfully: " + path.getFileName(), Map.of(
                 "bytesWritten", content.length(),
                 "file", path.toString()
@@ -133,8 +164,9 @@ public class FileTool implements AgentTool {
     }
 
     private ToolResult createFile(Path path, String content) throws IOException {
+        // Existing files must be allowed to be modified
         if (Files.exists(path)) {
-            return ToolResult.failure("File already exists: " + path.getFileName() + ". Use WRITE_FILE to overwrite.");
+            return writeFile(path, content);
         }
         if (path.getParent() != null && !Files.exists(path.getParent())) {
             Files.createDirectories(path.getParent());
@@ -143,6 +175,16 @@ public class FileTool implements AgentTool {
         String initialContent = content != null ? content : "";
         Files.writeString(path, initialContent, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
 
+        // Verify the file exists and contains the new content
+        if (!Files.exists(path)) {
+            return ToolResult.failure("Verification failed: file does not exist on disk after creation: " + path);
+        }
+        String written = Files.readString(path, StandardCharsets.UTF_8);
+        if (!written.equals(initialContent)) {
+            return ToolResult.failure("Verification failed: created content verification mismatch on disk for " + path);
+        }
+
+        log.info("Successfully created file on disk: {} ({} bytes)", path, initialContent.length());
         return ToolResult.success("File created successfully: " + path.getFileName(), Map.of(
                 "bytesWritten", initialContent.length(),
                 "file", path.toString()
@@ -165,3 +207,4 @@ public class FileTool implements AgentTool {
         return ToolResult.success("File deleted successfully: " + path.getFileName(), Map.of("file", path.toString()));
     }
 }
+

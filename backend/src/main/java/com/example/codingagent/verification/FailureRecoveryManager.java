@@ -63,10 +63,16 @@ public class FailureRecoveryManager {
         }
 
         advice.append("\nRequired Recovery Actions:\n");
-        advice.append("1. Analyze the root cause of the error output above.\n");
-        advice.append("2. Inspect the modified files to locate syntax errors, missing imports, or incorrect logic.\n");
-        advice.append("3. Apply surgical file modifications using WRITE_FILE to fix the errors.\n");
-        advice.append("4. The harness will automatically rerun the detected test suite after your file changes.\n");
+        if (state.getFilesModified().isEmpty()) {
+            advice.append("CRITICAL RECOVERY MANDATE: No files were modified during previous execution.\n");
+            advice.append("You MUST emit a WRITE_FILE action immediately containing the complete updated code for the target file.\n");
+            advice.append("Do NOT call SEARCH or READ_FILE. Directly emit WRITE_FILE now.\n");
+        } else {
+            advice.append("1. Analyze the root cause of the error output above.\n");
+            advice.append("2. Inspect the modified files to locate syntax errors, missing imports, or incorrect logic.\n");
+            advice.append("3. Apply surgical file modifications using WRITE_FILE to fix the errors.\n");
+            advice.append("4. The harness will automatically rerun the detected test suite after your file changes.\n");
+        }
 
         log.info("Generated recovery instructions for task {}: {} failed checks", state.getTaskId(), failureResult.checksFailed().size());
         return advice.toString();

@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -77,6 +78,8 @@ public class ContextManager {
         String projectType = repositoryTool.detectProjectType(rootFile);
         String readme = readReadme(root);
         List<String> keyFiles = findSampleFiles(root);
+
+        ensureGitInitialized(rootFile);
 
         String gitStatus = "Not a git repository";
         if (new File(rootFile, ".git").exists()) {
@@ -143,7 +146,7 @@ public class ContextManager {
             userContext.append("(None isolated yet. Use SEARCH to locate source files).\n\n");
         } else {
             for (String srcFile : relevant.sources) {
-                if (state.getFilesInspected().contains(srcFile) || alreadySent.contains(srcFile)) {
+                if (alreadySent.contains(srcFile)) {
                     userContext.append("- ").append(srcFile).append(" (already inspected)\n");
                 } else {
                     userContext.append("--- File: ").append(srcFile).append(" ---\n");
@@ -161,7 +164,7 @@ public class ContextManager {
             userContext.append("(None isolated yet. Use SEARCH to locate test files).\n\n");
         } else {
             for (String testFile : relevant.tests) {
-                if (state.getFilesInspected().contains(testFile) || alreadySent.contains(testFile)) {
+                if (alreadySent.contains(testFile)) {
                     userContext.append("- ").append(testFile).append(" (already inspected)\n");
                 } else {
                     userContext.append("--- Test: ").append(testFile).append(" ---\n");
@@ -215,13 +218,20 @@ public class ContextManager {
                         ar.success() ? "SUCCESS" : "FAILED"));
 
                 if (ar.output() != null && !ar.output().isBlank()) {
-                    String conciseOut = extractConciseOutput(ar.output(), 350);
+                    String conciseOut;
+                    if (ar.actionType() == ActionType.READ_FILE) {
+                        conciseOut = ar.output().length() > 4000
+                                ? ar.output().substring(0, 4000) + "\n...[truncated remainder of file]"
+                                : ar.output();
+                    } else {
+                        conciseOut = extractConciseOutput(ar.output(), 800);
+                    }
                     if (!conciseOut.isBlank()) {
                         userContext.append("Output:\n").append(conciseOut).append("\n");
                     }
                 }
                 if (ar.error() != null && !ar.error().isBlank()) {
-                    String conciseErr = extractConciseOutput(ar.error(), 300);
+                    String conciseErr = extractConciseOutput(ar.error(), 500);
                     if (!conciseErr.isBlank()) {
                         userContext.append("Error:\n").append(conciseErr).append("\n");
                     }
@@ -283,7 +293,9 @@ public class ContextManager {
         if (state.getFilesModified().isEmpty()) {
             if (!state.getFilesInspected().isEmpty()) {
                 userContext.append("Files inspected: ").append(String.join(", ", state.getFilesInspected())).append(".\n");
-                userContext.append("CRITICAL: You must now apply the required code change to the repository. Emit JSON with \"action\": \"WRITE_FILE\", target \"path\", and the complete updated \"content\". Do not merely describe edits.\n\n");
+                userContext.append("CRITICAL: You have already inspected the codebase. Do NOT call READ_FILE or SEARCH again.\n");
+                userContext.append("You MUST emit a WRITE_FILE action NOW to implement the required modifications on disk.\n");
+                userContext.append("Action Format: {\"action\":\"WRITE_FILE\",\"path\":\"relative/path\",\"content\":\"full updated file source code\",\"reason\":\"...\"}\n\n");
             } else {
                 userContext.append("Inspect target files using READ_FILE or immediately apply the necessary changes using WRITE_FILE with the complete updated content.\n\n");
             }
@@ -470,6 +482,24 @@ public class ContextManager {
     public void cleanupTask(String taskId) {
         if (taskId != null) {
             sentFilesPerTask.remove(taskId);
+        }
+    }
+
+    private void ensureGitInitialized(File rootDir) {
+        if (rootDir == null || !rootDir.exists() || !rootDir.isDirectory()) {
+            return;
+        }
+        if (new File(rootDir, ".git").exists()) {
+            return;
+        }
+        try {
+            log.info("Workspace at {} is not a git repository. Initializing baseline git repository...", rootDir);
+            new ProcessBuilder("git", "init").directory(rootDir).start().waitFor(5, TimeUnit.SECONDS);
+            new ProcessBuilder("git", "add", "-A").directory(rootDir).start().waitFor(5, TimeUnit.SECONDS);
+            new ProcessBuilder("git", "commit", "-m", "initial baseline", "--allow-empty").directory(rootDir).start().waitFor(5, TimeUnit.SECONDS);
+            log.info("Successfully initialized baseline git repository at {}", rootDir);
+        } catch (Exception e) {
+            log.warn("Could not initialize git baseline at {}: {}", rootDir, e.getMessage());
         }
     }
 

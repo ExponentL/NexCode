@@ -22,70 +22,42 @@ make clean
 
 ---
 
-## Evaluation Input Format
+## Evaluation Flow
 
-Nexcode supports both interactive and fully automated non-interactive evaluation modes:
-
-### 1. Interactive Evaluation Mode (Default)
 When you run:
 ```bash
+make setup
 make run
 ```
-Nexcode prompts for:
-1. **Target workspace/repository path**: Path to the repository under test (press Enter to default to current directory `.`).
-2. **Task / Issue description**: The problem or requirement statement.
 
-### 2. Make Parameters
-Pass parameters directly to `make run`:
+1. **Dual Service Startup**: `make run` launches both the Spring Boot backend (`http://localhost:8080`) and the React + TypeScript frontend (`http://localhost:5173`), prints the URLs in the console, and automatically opens your browser to the web dashboard.
+2. **Dynamic Repository Selection**: In the browser UI (under the **Repositories** tab), choose or provide any target repository on your system, or paste any remote GitHub repository URL to clone and detect it. The agent never assumes a fixed repository or project type.
+3. **Task Submission**: On the Dashboard, provide the coding task or issue description and run the agent.
+4. **Autonomous Agent Execution**:
+   - **Inspects**: Dynamically inspects the workspace, detecting languages, frameworks, build systems, and test frameworks without assumptions.
+   - **Modifies Real Files**: Plans and writes actual file modifications directly to disk using Java NIO, validating paths within the workspace.
+   - **Re-Reads & Verifies**: Re-reads modified files directly from disk and computes live Git diffs.
+   - **Runs Real Tests**: Executes native workspace test commands, capturing real terminal exit codes, stdout, and stderr.
+   - **Iterative Recovery**: Analyzes failures, plans targeted fixes, and re-executes tests across recovery cycles.
+   - **Evidence Verification**: Verifies passing test results and code changes, reporting structured verification results.
+
+---
+
+## Non-Interactive CLI Evaluation Mode
+
+For headless evaluation or CI/CD pipelines, non-interactive evaluation mode is also supported:
+
+### 1. Make Target
 ```bash
-make run WORKSPACE="/path/to/target-repo" TASK="Fix the divide-by-zero bug in calculator.py"
+make eval WORKSPACE="/path/to/target-repo" TASK="Fix the divide-by-zero bug in calculator.py"
 ```
 
-### 3. CLI Arguments
-Run the evaluation script with direct flags:
+### 2. Direct Script
 ```bash
 ./run-evaluation.sh --workspace="/path/to/target-repo" --task="Fix the divide-by-zero bug in calculator.py"
 ```
 
-### 4. Environment Variables
-Export configuration variables before running:
+### 3. Piped Input
 ```bash
-export WORKSPACE_PATH="/path/to/target-repo"
-export TASK="Fix the divide-by-zero bug in calculator.py"
-make run
+echo "Fix the negative root bug in math_utils.py" | make eval WORKSPACE="/path/to/target-repo"
 ```
-
-### 5. Piped / Non-Interactive STDIN
-Pipe a task or issue description directly via standard input:
-```bash
-make run WORKSPACE="/path/to/target-repo" < issue_description.txt
-```
-or:
-```bash
-echo "Implement error handling for negative roots in math_utils.py" | make run WORKSPACE="/path/to/target-repo"
-```
-
----
-
-## Evaluation Flow
-
-When `make run` executes, Nexcode autonomously performs:
-
-1. **Workspace Inspection**: Dynamically analyzes project structure, detects language, framework, build tools (Maven, Gradle, npm, Python pytest/unittest, Make, Cargo, Go), and Git status without assumptions.
-2. **Context & Planning**: Identifies task-relevant files and synthesizes a step-by-step modification plan.
-3. **Real File Modification**: Validates target paths (preventing path traversal outside the workspace) and writes actual changes directly to disk using Java NIO.
-4. **Real Command & Test Execution**: Executes the repository's native test commands from the workspace directory, capturing exit codes, stdout, and stderr.
-5. **Failure Analysis & Recovery**: If tests fail, parses errors and compiler messages to plan and apply targeted fixes across recovery cycles.
-6. **Evidence Verification**: Re-reads modified files from disk, runs Git diff, verifies passing test suites, and outputs structured evaluation metrics.
-7. **Exit Code**: Exits with code `0` on successful verification or code `1` if verification fails.
-
----
-
-## Optional: Web Dashboard Mode
-
-For local interactive use, the existing web UI remains fully operational:
-
-```bash
-make ui
-```
-Opens the interactive React + TypeScript dashboard at [http://localhost:5173](http://localhost:5173) with live SSE event streaming.

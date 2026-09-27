@@ -40,8 +40,15 @@ public class AgentProperties {
         private String baseUrl = "https://api.openai.com/v1";
         private int timeoutSeconds = 120;
         private double temperature = 0.1;
+        private boolean apiKeySet = false;
+        private boolean providerSet = false;
+        private boolean nameSet = false;
+        private boolean baseUrlSet = false;
 
         public String getProvider() {
+            if (providerSet) {
+                return provider != null ? provider : "openai";
+            }
             String envProvider = System.getenv("AI_MODEL_PROVIDER");
             if (envProvider != null && !envProvider.isBlank()) {
                 return envProvider.trim();
@@ -54,14 +61,18 @@ public class AgentProperties {
             if (key != null && key.startsWith("sk-xt-")) {
                 return "xkiro";
             }
-            return provider;
+            return provider != null ? provider : "openai";
         }
 
         public void setProvider(String provider) {
             this.provider = provider;
+            this.providerSet = true;
         }
 
         public String getName() {
+            if (nameSet) {
+                return name != null ? name : "gpt-4o";
+            }
             String envName = System.getenv("AI_MODEL_NAME");
             if (envName != null && !envName.isBlank()) {
                 return envName.trim();
@@ -74,33 +85,38 @@ public class AgentProperties {
             if (key != null && key.startsWith("sk-xt-")) {
                 return "qwen/qwen3.5-flash:free";
             }
-            return name;
+            return name != null ? name : "gpt-4o";
         }
 
         public void setName(String name) {
             this.name = name;
+            this.nameSet = true;
         }
 
         public String getApiKey() {
+            if (apiKeySet) {
+                return apiKey != null ? apiKey.trim() : "";
+            }
             String envAi = System.getenv("AI_API_KEY");
             if (envAi != null && !envAi.isBlank()) {
                 return envAi.trim();
-            }
-            if (apiKey != null && !apiKey.isBlank()) {
-                return apiKey.trim();
             }
             String envAgent = System.getenv("AGENT_MODEL_API_KEY");
             if (envAgent != null && !envAgent.isBlank()) {
                 return envAgent.trim();
             }
-            return "";
+            return apiKey != null ? apiKey.trim() : "";
         }
 
         public void setApiKey(String apiKey) {
             this.apiKey = apiKey;
+            this.apiKeySet = true;
         }
 
         public String getBaseUrl() {
+            if (baseUrlSet) {
+                return baseUrl != null ? baseUrl : "https://api.openai.com/v1";
+            }
             String envBase = System.getenv("AI_BASE_URL");
             if (envBase != null && !envBase.isBlank()) {
                 return envBase.trim();
@@ -113,11 +129,12 @@ public class AgentProperties {
             if (key != null && key.startsWith("sk-xt-")) {
                 return "https://api.xkiro.com/v1";
             }
-            return baseUrl;
+            return baseUrl != null ? baseUrl : "https://api.openai.com/v1";
         }
 
         public void setBaseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
+            this.baseUrlSet = true;
         }
 
         public int getTimeoutSeconds() {
